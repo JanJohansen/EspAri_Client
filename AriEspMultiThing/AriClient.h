@@ -4,7 +4,13 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ArduinoJson.h>
-#include <EEPROM.h>
+#include "ConfigStore.h"
+
+// For WifiManager
+#include <ESP8266WebServer.h>
+#include <DNSServer.h>
+#include <WiFiManager.h>
+
 
 class AriClient
 {
@@ -49,8 +55,11 @@ class AriClient
     
     bool wifiConnected = false;
     bool tcpConnected = false;
-
+    
+    ConfigData* pConfig;
+    
     void handleEvent(uint8 event, void *pData);
+    void handleWifiManager();
     void checkEeprom();
     uint16 getEepromCs();
     char* readEepromString(uint16 address, char* pBuf, uint16 maxLength);

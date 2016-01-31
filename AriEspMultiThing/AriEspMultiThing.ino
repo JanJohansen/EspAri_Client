@@ -1,4 +1,7 @@
 #include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <DNSServer.h>
+#include <WiFiManager.h>
 #include <EEPROM.h>
 #include <ArduinoJson.h>
 #include "LedBlinker.h"
@@ -14,10 +17,10 @@
 */
 
 
+#define MOTION_SENSOR_DIGITAL_PIN 4
 #define DHTPIN 5
 #define DHTTYPE DHT22
-#define MOTION_SENSOR_DIGITAL_PIN 4
-#define RELAY_PIN 0                             
+#define RELAY_PIN 14
 #define RELAY_ON 0
 #define RELAY_OFF 1
 #define LED_PIN 16
@@ -26,14 +29,14 @@
 AriClient* pAri;
 LedBlinker led(LED_PIN);
 DHT dht(DHTPIN, DHTTYPE);
-DAQ dhtTempDaq(1,1,1);
-DAQ dhtHumDaq(1,1,1);
+DAQ dhtTempDaq(10,1);
+DAQ dhtHumDaq(10,1);
 
 bool lastMotionState = false;
 
 // app-Timer values
 unsigned long appTimerStart;
-unsigned long appTimerDelay = 5000;
+unsigned long appTimerDelay = 6000;
 boolean       appTimerTimedOut = true;
 
 void setup() {
@@ -76,7 +79,7 @@ void loop() {
     // Check if any reads failed and exit early (to try again).
     if (isnan(h) || isnan(t)) {
       Serial.println("Failed to read from DHT sensor!");
-      //ari.sendString("ERR", "DHT read error.");
+      pAri->sendString("ERR", "DHT read error.");
       return;
     }
 
@@ -84,12 +87,12 @@ void loop() {
     dtostrf(t, 0, 1,buf);
     Serial.print("T: ");
     Serial.print(t);
-    //ari.sendNumber("rawTemp", buf);
+    pAri->sendNumber("rawTemp", buf);
 
     dtostrf(h, 0, 1,buf);
     Serial.print("\tH: ");
     Serial.println(h);
-    //ari.sendNumber("rawHum", buf);
+    pAri->sendNumber("rawHum", buf);
 
     dhtTempDaq.handleValue(t);
     dhtHumDaq.handleValue(h);
@@ -102,7 +105,7 @@ void loop() {
     lastMotionState = motion;
     Serial.print("Motion: ");
     Serial.println(motion ? "1" : "0");
-    //ari.sendNumber("motion", motion ? "1" : "0");
+    pAri->sendNumber("motion", motion ? "1" : "0");
   }
 
   // Blink according to state!
@@ -115,13 +118,13 @@ void loop() {
 void dhtTempValueHandler(char *pValueString){
   Serial.print("New Temperature: ");
   Serial.println(pValueString);
-  //ari.sendNumber("temperature", pValueString);
+  pAri->sendNumber("temperature", pValueString);
 }
 
 void dhtHumValueHandler(char *pValueString){
   Serial.print("New Humidity: ");
   Serial.println(pValueString);
-  //ari.sendNumber("humidity", pValueString);
+  pAri->sendNumber("humidity", pValueString);
 }
 
 void handleSetValue(const char* pName, const char* pValue){
@@ -131,7 +134,7 @@ void handleSetValue(const char* pName, const char* pValue){
 
     if((*pValue == 1) || (*pValue == '1') || (*(pValue+1) == 'n') || (*(pValue+1) == 'N')) digitalWrite(RELAY_PIN, RELAY_ON);
     else digitalWrite(RELAY_PIN, RELAY_OFF);
-    //ari.sendString("light", pValue);
+    pAri->sendString("light", pValue);
   }
 }
 

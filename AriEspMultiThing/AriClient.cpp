@@ -15,33 +15,10 @@ TODOs
 - Make PCB/Box for "LivingroomLampThing"... RHTM (Relay, Humidity, Temperature, Motion)
 */
 
-#define log(x) Serial.print(x)
-#define logln(x) Serial.println(x)
-
 #include "AriClient.h"
 
-// EEPROM definitions.
-#define EEPROM_SIZE 512
-#define EEPROM_SOFTWARE_VERSION 0
-#define EEPROM_CS 2
-#define EEPROM_WIFI_SSID_START 2+2
-#define EEPROM_WIFI_PASSWORD_START 4+33
-#define EEPROM_ARI_SERVER_URL_START 4+33+65
-#define EEPROM_ARI_SERVER_PORT_START 4+33+65+128
-#define EEPROM_ARI_SERVER_AUTH_TOKEN_START 4+33+65+128+2
-#define EEPROM_END 4+33+65+128+2+257
-/*
-#define EEPROM_SIZE 512
-#define EEPROM_SOFTWARE_VERSION 0                   // uint16 version. Must match hardcoded value in SW.
-#define EEPROM_CS 2                                 // CS to make EEPROM sum = 0.
-#define EEPROM_WIFI_SSID_START 2+2                  // Max SSID length is 32 + \0
-#define EEPROM_WIFI_PASSWORD_START 4+33             // According to 802.11i, max PSK or passphrase is 64 characters + \0
-#define EEPROM_ARI_SERVER_URL_START 4+33+65         // max URL length is CHOSEN to be 127 characters + \0
-#define EEPROM_ARI_SERVER_PORT_START 4+33+65+128    // Port is a 16bit integer = 2 bytes.
-#define EEPROM_ARI_SERVER_AUTH_TOKEN_START 4+33+65+128+2  // Authentification token is CHOSEN to be limited to 256 characters
-#define EEPROM_END 4+33+65+128+2+257                // Authentification token is CHOSEN to be limited to 256 characters (typical = 180-200)
-*/
-
+#define log(x) Serial.print(x)
+#define logln(x) Serial.println(x)
 
 
 //AriClient::AriClient(const char* pSSID, const char* pPassword, const char* pDeviceName){
@@ -133,13 +110,24 @@ void AriClient::handleEvent(uint8 event, void *pData){
     case STATE_RESET:
       // Connect to a WiFi network
       // TODO: Get SSID + password from EEPROM config.
-      // TODO: If not connecting to wifi, start as AP and receive configurtaion.
+
+      pConfig = ConfigStore::load();
+      if(!ConfigStore::isDataValid(pConfig)){
+        logln("EEPROM DATA NOT OK - Starting WifiManager to get proper data!");
+        handleWifiManager();    // Will reset and not return!
+        return;
+      }
+      
       logln();
       log("Connecting to ");
-      logln(ssid);
-      
-      WiFi.begin(ssid, password);
+      logln(pConfig->ssid);
+
+      WiFi.begin(pConfig->ssid, pConfig->wifiPassword);
+      setTimeout(5000); // Wait 5 sec for reply.
       state = STATE_WAIT4WIFI;
+
+      ConfigStore::free();
+      
     break;
     //---------------------------------------------------------------------------
     case STATE_WAIT4WIFI:
@@ -148,14 +136,21 @@ void AriClient::handleEvent(uint8 event, void *pData){
         logln(WiFi.localIP());
         
         // Connect to ARI server.
-        // TODO: Get server IP from EEPROM config.
+        // Get server IP from EEPROM config or...
+        // TODO: Implement mDNS resolver for ARI server.
+        pConfig = ConfigStore::load();
         log("connecting to ");
-        logln(ariHost);
-        pWifi->connect(ariHost, ariPort);
-    
+        logln(pConfig->ariServer);
+        pWifi->connect(pConfig->ariServer, 5000); 
         setTimeout(5000); // Wait 5 sec for connection.
-    
         state = STATE_WAIT4ARI;
+
+        ConfigStore::free();
+        
+      } else if(event == EVENT_TIMEOUT){
+          log("Connecting to wifi failed, going into WifiManager mode.");
+          setTimeout(0);  // Disable timeout.
+          handleWifiManager();    // Will reset and not return!
       }
     break;
     //---------------------------------------------------------------------------
@@ -164,13 +159,18 @@ void AriClient::handleEvent(uint8 event, void *pData){
         logln("Connected to ARI.");
         
         // TODO: check validity of EEPROM.
-        //checkEeprom();
+        pConfig = ConfigStore::load();
+        if(!ConfigStore::isDataValid(pConfig)){
+          logln("EEPROM DATA NOT OK - Starting WifiManager to get proper data!");
+          handleWifiManager();    // Will reset and not return!
+          return;
+        }
     
         // TODO: Read token form EEPROM.
         //char pBuf[256];
         //const char* pAuthToken = readEepromString(EEPROM_ARI_SERVER_AUTH_TOKEN_START, pBuf, 256);
         //const char* pAuthToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJuYW1lIjoiRXNwVGVzdFRoaW5nIiwicm9sZSI6ImRldmljZSIsImNyZWF0ZWQiOiIyMDE2LTAxLTA1VDIyOjUyOjAzLjk1MFoifQ.hbHlCU8VuptO9wQMN8x1oC5HGN_-4ooer4JI4HaGPdA";
-        const char* pAuthToken = "\0";
+        char* pAuthToken = pConfig->authToken;
         if( *pAuthToken == 0) {
           // Request token.
           String msg = "{\"req\":\"";
@@ -196,6 +196,9 @@ void AriClient::handleEvent(uint8 event, void *pData){
           state = STATE_WAIT4AUTHREPLY;
 
         }
+        
+        ConfigStore::free();
+        
       } else if(event == EVENT_TIMEOUT){
           log("connecting to ");
           logln(ariHost);
@@ -224,7 +227,17 @@ void AriClient::handleEvent(uint8 event, void *pData){
         logln(pAuthToken);
         
         // Store authToken in EEPROM.
-  
+        logln("Storing new authToken in EEPROM!");
+        
+        pConfig = ConfigStore::load();
+        if(!ConfigStore::isDataValid(pConfig)){
+          logln("EEPROM DATA NOT OK - Starting WifiManager to get proper data!");
+          handleWifiManager();    // Will reset and not return!
+          return;
+        }
+
+        strncpy(pConfig->authToken, pAuthToken, sizeof(pConfig->authToken));
+        ConfigStore::save(pConfig);
   
         // Send auth token to server.
         String tlg = "{\"req\":\"";
@@ -237,6 +250,8 @@ void AriClient::handleEvent(uint8 event, void *pData){
         pWifi->print(tlg);
         setTimeout(2000); // Wait 2 sec for reply.
         state = STATE_WAIT4AUTHREPLY;
+
+        ConfigStore::free();
   
       } else if(event == EVENT_TCP_DISCONNECTED) {
         state = STATE_WAIT4WIFI;
@@ -251,6 +266,8 @@ void AriClient::handleEvent(uint8 event, void *pData){
       if(event == EVENT_MESSAGE){
         log("Reply:");
         logln((char*)pData);
+
+        // TODO: Handle if not authenticated!
   
         String tlg = "{\"cmd\":\"SETCLIENTINFO\",\"pars\":{\"name\":\"";
         tlg += pDeviceName;
@@ -324,57 +341,125 @@ void AriClient::sendNumber(const char* pName, const char* pValue){
   pWifi->print(tlg);
 }
 
+/***************************************************************************************/
+byte shouldSaveConfig = 0;
+
+void configModeCallback (WiFiManager *myWiFiManager) {
+  //if you used auto generated SSID, print it
+  log("Entered config mode with SSID: ");
+  logln(myWiFiManager->getConfigPortalSSID());
+  log("To configgure device, please go to: ");
+  logln(WiFi.softAPIP());
+
+}
+
+void saveConfigCallback () {
+  logln("***** Should save config...");
+  shouldSaveConfig = 1;
+}
+
+void printConfig(){
+  ConfigData* pConfig = ConfigStore::load();
+
+  logln("Configuration in EEPROM: ");
+  log("SSID: ");
+  logln(pConfig->ssid);
+  log("PW: ");
+  logln(pConfig->wifiPassword);
+  log("DeviceName: ");
+  logln(pConfig->deviceName);
+  log("ariUrl: ");
+  logln(pConfig->ariServer);
+  log("authToken: ");
+  logln(pConfig->authToken);
+  log("checkSum: ");
+  logln(pConfig->checkSum);
+
+  ConfigStore::free();
+}
+
+// Handling of WifiManager mode... Reset/reboot when done.
+void AriClient::handleWifiManager(){
+
+  printConfig();
 
 
-//**********************************************************************************
-// EEPROM routines
-void AriClient::checkEeprom(){
-  uint16 cs = getEepromCs();
-  if(cs != 0) {
-    logln("!ERROR! - EEPROM corrupted.");
-    clearEeprom();
-    logln("EEPROM has been reinitialized.");
+  // Custom parameters.
+  char ariServer[50] = "192.168.1.127";
+  char deviceName[50] = "EspAriDevice";
+
+  // Overwrite with EEPROM stored data if available.
+  ConfigData* pConfig = ConfigStore::load();
+  if(!ConfigStore::isDataValid(pConfig)){
+    strncpy(ariServer, pConfig->ariServer, sizeof(pConfig->ariServer));
+    strncpy(deviceName, pConfig->deviceName, sizeof(pConfig->deviceName));
   }
-}
+  ConfigStore::free();
 
-uint16 AriClient::getEepromCs(){
-  EEPROM.begin(EEPROM_SIZE);
-  uint16 cs = 0;
-  for(int i = 0; i < EEPROM_SIZE; i+=2) {
-    cs ^= EEPROM.read(i) | EEPROM.read(i+1);
+  WiFiManagerParameter wifiParam_ariServer("ARI_server", "IP or blank to use (mDNS) AutoDetect.", ariServer, sizeof(ariServer)-1);
+  WiFiManagerParameter wifiParam_deviceName("ARI_device_name", "Name of this device.", deviceName, sizeof(deviceName)-1);
+
+  // Config 
+  WiFiManager wifiManager;
+  wifiManager.setAPCallback(configModeCallback);
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+  wifiManager.setTimeout(60);
+  wifiManager.addParameter(&wifiParam_ariServer);
+  wifiManager.addParameter(&wifiParam_deviceName);
+   
+  if(!wifiManager.startConfigPortal("Ari_Device")) {
+    logln("!!! Timeout...");
+    // Reset and try again.
+    //ESP.reset();
+    //delay(1000);
   }
-  EEPROM.end();
-  return cs;
+
+  //logln("WIFI Connected.");
+
+  const char* pAriServer = wifiParam_ariServer.getValue();
+  const char* pDeviceName = wifiParam_deviceName.getValue();
+
+  logln("Config from WM.");
+  log("SSID: ");
+  logln(wifiManager.getSSID().c_str());
+  log("PW: ");
+  logln(wifiManager.getPassword());
+  log("Device name: ");
+  logln((char*)pDeviceName);
+  log("Connecting to ARI server on: ");
+  logln((char*)pAriServer);
+
+  printConfig();
+
+  //save the custom parameters to FS
+  pConfig = ConfigStore::load();
+  if( (!ConfigStore::isDataValid(pConfig)) || 
+      (shouldSaveConfig) ||
+      (strcmp(pConfig->ssid, wifiManager.getSSID().c_str()) != 0) ||
+      (strcmp(pConfig->wifiPassword, wifiManager.getPassword().c_str()) != 0) ||
+      (strcmp(pConfig->deviceName, pDeviceName) != 0) ||
+      (strcmp(pConfig->ariServer, pAriServer) != 0)
+  ){
+    
+    logln("Saving configuration...");
+
+    if(strcmp(pConfig->deviceName, pDeviceName) != 0) pConfig->authToken[0] = 0; // Clear authToken if device has a new name.!
+
+    strncpy(pConfig->ssid, wifiManager.getSSID().c_str(), sizeof(pConfig->ssid));
+    strncpy(pConfig->wifiPassword, wifiManager.getPassword().c_str(), sizeof(pConfig->wifiPassword));
+    strncpy(pConfig->deviceName, pDeviceName, sizeof(pConfig->deviceName));
+    strncpy(pConfig->ariServer, pAriServer, sizeof(pConfig->ariServer));
+    
+    ConfigStore::save(pConfig);
+  }
+  ConfigStore::free();
+
+  printConfig();
+
+  ESP.reset();
+  delay(1000);
 }
 
-char* AriClient::readEepromString(uint16 address, char* pBuf, uint16 maxLength){
-  EEPROM.begin(EEPROM_SIZE);
-  char c;
-  uint16 pos = 0;
-  do{
-    c = EEPROM.read(address++);
-    pBuf[pos++] = c;
-  } while((c != 0) && (pos <= maxLength));
-  EEPROM.end();
-  return pBuf;
-}
 
-void AriClient::writeEepromString(uint16 address, char* pBuf, uint16 maxLength){
-  EEPROM.begin(EEPROM_SIZE);
-  uint16 pos = 0;
-  do{
-    EEPROM.write(address, pBuf[pos++]);
-    address++;
-  }while((pBuf[pos] != 0) && (pos <= maxLength));
-  EEPROM.end();
-}
 
-void AriClient::clearEeprom(){
-  EEPROM.begin(EEPROM_SIZE);
-  for (int i = 0; i < EEPROM_SIZE; i++) EEPROM.write(i, 0);
-  uint16 cs = getEepromCs();
-//  EEPROM.write(EEPROM_SOFTWARE_VERSION, SOFTWARE_VERSION);
-//  EEPROM.write(EEPROM_CS, SOFTWARE_VERSION ^ 0xFFFF);
-  EEPROM.end();
-}
 

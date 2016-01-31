@@ -1,16 +1,14 @@
 #include "daq.h"
 
-DAQ::DAQ(uint16 averageCount, uint8 precision, bool preventFlicker)
+DAQ::DAQ(uint16 averageCount, uint8 precision)
 {
   _averageCount = averageCount;
   _precision = precision;
-  _preventFlicker = preventFlicker;
 
   _dataCount = 0;
   _averagingSum = 0;
   _valueHandler = 0;
   _lastValue = 99999999;
-  _lastUnique = 99999999;
 }
 
 void DAQ::handleValue(float value){
@@ -22,16 +20,13 @@ void DAQ::handleValue(float value){
     if(_valueHandler){
       float value = _averagingSum / _dataCount;
 
-      // Just don't send same val for now...! :O(
-      if(_lastValue != value){
-        // Handle deflickering.
-        if(value != _lastUnique){
-          char buf[20];
-          dtostrf(value, 0, _precision, buf);
-          _valueHandler(buf);
-          _lastValue = _lastUnique;
-          _lastUnique = value;
-        }
+      // Don't send same val...! :O(
+      // TODO - Use hysteresis.
+      if(value != _lastValue){
+        char buf[20];
+        dtostrf(value, 0, _precision, buf);
+        _valueHandler(buf);
+        _lastValue = value;
       }
     }
     _dataCount = 0; 
