@@ -123,6 +123,7 @@ void AriClient::handleEvent(uint8 event, void *pData){
       logln(pConfig->ssid);
 
       WiFi.begin(pConfig->ssid, pConfig->wifiPassword);
+      WiFi.mode(WIFI_STA);  // To stop announcing access point ssid.!
       setTimeout(5000); // Wait 5 sec for reply.
       state = STATE_WAIT4WIFI;
 
