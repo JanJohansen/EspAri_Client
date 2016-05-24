@@ -113,6 +113,7 @@ void AriClient::handleEvent(uint8 event, void *pData){
 
       pConfig = ConfigStore::load();
       if(!ConfigStore::isDataValid(pConfig)){
+        ConfigStore::free();
         logln("EEPROM DATA NOT OK - Starting WifiManager to get proper data!");
         handleWifiManager();    // Will reset and not return!
         return;
@@ -122,9 +123,10 @@ void AriClient::handleEvent(uint8 event, void *pData){
       log("Connecting to ");
       logln(pConfig->ssid);
 
-      WiFi.begin(pConfig->ssid, pConfig->wifiPassword);
-      WiFi.mode(WIFI_STA);  // To stop announcing access point ssid.!
-      setTimeout(5000); // Wait 5 sec for reply.
+      WiFi.begin((const char*)pConfig->ssid, (const char*)pConfig->wifiPassword); // NEED (const char*) cast!!!!???
+      //WiFi.begin("MiX2", "jan190374");
+      WiFi.mode(WIFI_STA);  // To stop announcing access point ssid.! (This is a bug workaround.)
+      setTimeout(15000); // Wait 5 sec for reply.
       state = STATE_WAIT4WIFI;
 
       ConfigStore::free();
@@ -149,7 +151,7 @@ void AriClient::handleEvent(uint8 event, void *pData){
         ConfigStore::free();
         
       } else if(event == EVENT_TIMEOUT){
-          log("Connecting to wifi failed, going into WifiManager mode.");
+          logln("Connecting to wifi failed, going into WifiManager mode.");
           setTimeout(0);  // Disable timeout.
           handleWifiManager();    // Will reset and not return!
       }
@@ -162,6 +164,7 @@ void AriClient::handleEvent(uint8 event, void *pData){
         // TODO: check validity of EEPROM.
         pConfig = ConfigStore::load();
         if(!ConfigStore::isDataValid(pConfig)){
+          ConfigStore::free();
           logln("EEPROM DATA NOT OK - Starting WifiManager to get proper data!");
           handleWifiManager();    // Will reset and not return!
           return;
@@ -232,6 +235,7 @@ void AriClient::handleEvent(uint8 event, void *pData){
         
         pConfig = ConfigStore::load();
         if(!ConfigStore::isDataValid(pConfig)){
+          ConfigStore::free();
           logln("EEPROM DATA NOT OK - Starting WifiManager to get proper data!");
           handleWifiManager();    // Will reset and not return!
           return;
@@ -276,7 +280,8 @@ void AriClient::handleEvent(uint8 event, void *pData){
         tlg += "\"temperature\":{},";
         tlg += "\"humidity\":{},";
         tlg += "\"motion\":{},";
-        tlg += "\"light\":{}";
+        tlg += "\"light\":{},";
+        tlg += "\"pwm\":{}";
         tlg += "}}}";
         pWifi->print(tlg);
         setTimeout(0); // No timeout since we don't await a reply.
@@ -404,7 +409,7 @@ void AriClient::handleWifiManager(){
   WiFiManager wifiManager;
   wifiManager.setAPCallback(configModeCallback);
   wifiManager.setSaveConfigCallback(saveConfigCallback);
-  wifiManager.setTimeout(60);
+  wifiManager.setTimeout(120);
   wifiManager.addParameter(&wifiParam_ariServer);
   wifiManager.addParameter(&wifiParam_deviceName);
    

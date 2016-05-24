@@ -13,6 +13,7 @@ class ConfigStore
     static byte isDataValid(ConfigData* pConfigData);
     static void free();
     static void save(ConfigData* pConfigData);
+    static void clear(ConfigData* pConfigData);
   
   private:
     ConfigStore();

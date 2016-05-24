@@ -23,6 +23,16 @@ void ConfigStore::save(ConfigData* pConfigData){
   EEPROM.commit();
 }
 
+void ConfigStore::clear(ConfigData* pConfigData){
+  uint16 addr = 0;
+  for(addr = 0; addr < sizeof(ConfigData); addr++){
+    EEPROM.write(0, addr);
+  }
+  //pConfigData->checkSum = 42;
+  //EEPROM.commit();
+}
+
+
 //**********************************************************************************
 // Usage:
 

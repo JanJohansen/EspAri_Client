@@ -24,19 +24,34 @@
 #define RELAY_ON 0
 #define RELAY_OFF 1
 #define LED_PIN 16
+#define PWM_PIN 15
+#define ZC_PIN 13
+#define TRIAC_PIN 12
 
 
 AriClient* pAri;
 LedBlinker led(LED_PIN);
 DHT dht(DHTPIN, DHTTYPE);
-DAQ dhtTempDaq(10,1);
-DAQ dhtHumDaq(10,1);
+DAQ dhtTempDaq(10,1, 0.05);
+DAQ dhtHumDaq(10,1, 0.05);
 
 bool lastMotionState = false;
 
+int pwmFromPoint = 0;
+int pwmToPoint = 0;
+int pwmIsPoint = 0;
+unsigned long pwmTransitionTime = 2000;
+unsigned long pwmFromTime = 0;
+
+
+
+// Dimmer variables.
+volatile unsigned long zcTime = 0;
+volatile uint16 zcInterval = 0;
+
 // app-Timer values
 unsigned long appTimerStart;
-unsigned long appTimerDelay = 6000;
+unsigned long appTimerDelay = 12000;
 boolean       appTimerTimedOut = true;
 
 void setup() {
@@ -60,9 +75,30 @@ void setup() {
   // Set up relay output.
   digitalWrite(RELAY_PIN, RELAY_OFF);
   pinMode(RELAY_PIN, OUTPUT); 
+
+  // Config PWM HW.
+  analogWriteFreq(200);
+  //analogWriteRange(255);
+  pinMode(PWM_PIN, OUTPUT);
+
+  // Config Dimmer IO.
+  pinMode(ZC_PIN, INPUT);
+  attachInterrupt(ZC_PIN, handleZCInterrupt, CHANGE);
+  digitalWrite(TRIAC_PIN, 0);
+  pinMode(TRIAC_PIN, OUTPUT);
+}
+
+void handleZCInterrupt(){
+  zcInterval = micros() - zcTime;
+  zcTime = micros();
 }
 
 void loop() {
+  if(zcInterval != 0){
+    Serial.println(zcInterval);
+    zcInterval = 0;
+  }
+
   pAri->loop();
   led.loop();
 
@@ -113,6 +149,26 @@ void loop() {
   else if(pAri->state == AriClient::STATE_WAIT4WIFI) led.setIntervals(50, 450);
   else if(pAri->state == AriClient::STATE_WAIT4ARI) led.setIntervals(50, 950);
   else led.setIntervals(50, 150);
+
+  // Handle PWM trasition...
+  if(pwmIsPoint != pwmToPoint){
+    unsigned long now = millis();
+    if(now > (pwmFromTime + pwmTransitionTime)) pwmIsPoint = pwmToPoint;
+    else{
+      if(pwmToPoint > pwmFromPoint) pwmIsPoint = pwmFromPoint + ((pwmToPoint - pwmFromPoint) * (now - pwmFromTime)) / pwmTransitionTime;
+      else pwmIsPoint = pwmFromPoint - ((pwmFromPoint - pwmToPoint) * (now - pwmFromTime)) / pwmTransitionTime;
+      
+      /*Serial.print(now - pwmFromTime);
+      Serial.print(" - ");
+      Serial.print(pwmToPoint - pwmFromPoint);
+      Serial.print(" - ");
+      Serial.println(pwmIsPoint);*/
+     
+    }
+
+    if(pwmIsPoint == 1023) digitalWrite(PWM_PIN, 1);
+    else analogWrite(PWM_PIN, pwmIsPoint);
+  }
 }
 
 void dhtTempValueHandler(char *pValueString){
@@ -128,7 +184,17 @@ void dhtHumValueHandler(char *pValueString){
 }
 
 void handleSetValue(const char* pName, const char* pValue){
-  if(strcasecmp(pName, "light") == 0){
+  if(strcasecmp(pName, "pwm") == 0){
+    pwmFromPoint = pwmIsPoint;
+    pwmToPoint = (atoi(pValue) * 1023) / 1000;
+    pwmFromTime = millis();
+
+    Serial.print("Dimming - From:");
+    Serial.println(pwmFromPoint);
+    Serial.print("To:");
+    Serial.println(pwmToPoint);
+
+  } else if(strcasecmp(pName, "light") == 0){
     Serial.print("LIGHT = ");
     Serial.println(pValue);
 
@@ -137,4 +203,5 @@ void handleSetValue(const char* pName, const char* pValue){
     pAri->sendString("light", pValue);
   }
 }
+
 
