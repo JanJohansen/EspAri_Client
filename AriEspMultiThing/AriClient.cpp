@@ -120,13 +120,14 @@ void AriClient::handleEvent(uint8 event, void *pData){
       }
       
       logln();
-      log("Connecting to ");
-      logln(pConfig->ssid);
+      log("Connecting to WiFi...");
+      //logln(pConfig->ssid);
 
-      WiFi.begin((const char*)pConfig->ssid, (const char*)pConfig->wifiPassword); // NEED (const char*) cast!!!!???
+      WiFi.begin();
+      //WiFi.begin((const char*)pConfig->ssid, (const char*)pConfig->wifiPassword); // NEED (const char*) cast!!!!???
       //WiFi.begin("MiX2", "jan190374");
       WiFi.mode(WIFI_STA);  // To stop announcing access point ssid.! (This is a bug workaround.)
-      setTimeout(15000); // Wait 5 sec for reply.
+      setTimeout(10000); // Wait 15 sec for reply.
       state = STATE_WAIT4WIFI;
 
       ConfigStore::free();
@@ -368,10 +369,10 @@ void printConfig(){
   ConfigData* pConfig = ConfigStore::load();
 
   logln("Configuration in EEPROM: ");
-  log("SSID: ");
-  logln(pConfig->ssid);
-  log("PW: ");
-  logln(pConfig->wifiPassword);
+  //log("SSID: ");
+  //logln(pConfig->ssid);
+  //log("PW: ");
+  //logln(pConfig->wifiPassword);
   log("DeviceName: ");
   logln(pConfig->deviceName);
   log("ariUrl: ");
@@ -409,7 +410,7 @@ void AriClient::handleWifiManager(){
   WiFiManager wifiManager;
   wifiManager.setAPCallback(configModeCallback);
   wifiManager.setSaveConfigCallback(saveConfigCallback);
-  wifiManager.setTimeout(120);
+  wifiManager.setTimeout(300);
   wifiManager.addParameter(&wifiParam_ariServer);
   wifiManager.addParameter(&wifiParam_deviceName);
    
@@ -427,9 +428,9 @@ void AriClient::handleWifiManager(){
 
   logln("Config from WM.");
   log("SSID: ");
-  logln(wifiManager.getSSID().c_str());
-  log("PW: ");
-  logln(wifiManager.getPassword());
+  logln(wifiManager.getConfigPortalSSID().c_str());
+  //log("PW: ");
+  //logln(wifiManager.getPassword());
   log("Device name: ");
   logln((char*)pDeviceName);
   log("Connecting to ARI server on: ");
@@ -441,8 +442,8 @@ void AriClient::handleWifiManager(){
   pConfig = ConfigStore::load();
   if( (!ConfigStore::isDataValid(pConfig)) || 
       (shouldSaveConfig) ||
-      (strcmp(pConfig->ssid, wifiManager.getSSID().c_str()) != 0) ||
-      (strcmp(pConfig->wifiPassword, wifiManager.getPassword().c_str()) != 0) ||
+      //(strcmp(pConfig->ssid, wifiManager.getConfigPortalSSID().c_str()) != 0) ||
+      //(strcmp(pConfig->wifiPassword, wifiManager.getPassword().c_str()) != 0) ||
       (strcmp(pConfig->deviceName, pDeviceName) != 0) ||
       (strcmp(pConfig->ariServer, pAriServer) != 0)
   ){
@@ -451,8 +452,8 @@ void AriClient::handleWifiManager(){
 
     if(strcmp(pConfig->deviceName, pDeviceName) != 0) pConfig->authToken[0] = 0; // Clear authToken if device has a new name.!
 
-    strncpy(pConfig->ssid, wifiManager.getSSID().c_str(), sizeof(pConfig->ssid));
-    strncpy(pConfig->wifiPassword, wifiManager.getPassword().c_str(), sizeof(pConfig->wifiPassword));
+    //strncpy(pConfig->ssid, wifiManager.getConfigPortalSSID().c_str(), sizeof(pConfig->ssid));
+    //strncpy(pConfig->wifiPassword, wifiManager.getPassword().c_str(), sizeof(pConfig->wifiPassword));
     strncpy(pConfig->deviceName, pDeviceName, sizeof(pConfig->deviceName));
     strncpy(pConfig->ariServer, pAriServer, sizeof(pConfig->ariServer));
     

@@ -47,5 +47,8 @@
     <ClInclude Include="LedBlinker.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="__vm\.AriEspMultiThing.vsarduino.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

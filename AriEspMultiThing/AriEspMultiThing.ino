@@ -8,7 +8,7 @@
 
 #include "AriClient.h"
 
-#include <DHT.h>
+//#include <DHT.h>
 #include "daq.h"
 
 /*
@@ -19,7 +19,7 @@
 
 #define MOTION_SENSOR_DIGITAL_PIN 4
 #define DHTPIN 5
-#define DHTTYPE DHT22
+//#define DHTTYPE DHT22
 #define RELAY_PIN 14
 #define RELAY_ON 0
 #define RELAY_OFF 1
@@ -31,7 +31,7 @@
 
 AriClient* pAri;
 LedBlinker led(LED_PIN);
-DHT dht(DHTPIN, DHTTYPE);
+//DHT dht(DHTPIN, DHTTYPE);
 DAQ dhtTempDaq(10,1, 0.05);
 DAQ dhtHumDaq(10,1, 0.05);
 
@@ -59,18 +59,18 @@ void setup() {
   Serial.println("");
   delay(10);
 
-  pAri = new AriClient("TestDevice");
+  pAri = new AriClient("Dev_201609");
   pAri->setValueCallback(handleSetValue);
   
-  dht.begin();
+  //dht.begin();
 
   // Enable timer for temperature and humidity conversion...
   appTimerDelay = 5 * 1000;  // 60SECONDS = 1 MINUTE!
   appTimerTimedOut = false; 
   appTimerStart = millis(); // Restart timeout.
 
-  dhtTempDaq.setValueHandler(dhtTempValueHandler);
-  dhtHumDaq.setValueHandler(dhtHumValueHandler);
+//  dhtTempDaq.setValueHandler(dhtTempValueHandler);
+//  dhtHumDaq.setValueHandler(dhtHumValueHandler);
 
   // Set up relay output.
   digitalWrite(RELAY_PIN, RELAY_OFF);
@@ -109,6 +109,7 @@ void loop() {
     appTimerStart = millis(); // Restart timeout.
     
 
+/*    
     float h = dht.readHumidity();
     float t = dht.readTemperature();
   
@@ -132,6 +133,7 @@ void loop() {
 
     dhtTempDaq.handleValue(t);
     dhtHumDaq.handleValue(h);
+*/
   } 
 
   // Any motion?
